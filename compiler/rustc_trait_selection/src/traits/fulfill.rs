@@ -3,7 +3,9 @@ use rustc_data_structures::obligation_forest::ProcessResult;
 use rustc_data_structures::obligation_forest::{Error, ForestObligation, Outcome};
 use rustc_data_structures::obligation_forest::{ObligationForest, ObligationProcessor};
 use rustc_errors::ErrorReported;
-use rustc_infer::traits::{SelectionError, TraitEngine, TraitEngineExt as _, TraitObligation};
+use rustc_infer::traits::{
+    OverflowError, SelectionError, TraitEngine, TraitEngineExt as _, TraitObligation,
+};
 use rustc_middle::mir::abstract_const::NotConstEvaluatable;
 use rustc_middle::mir::interpret::ErrorHandled;
 use rustc_middle::ty::error::ExpectedFound;
@@ -155,7 +157,11 @@ impl<'a, 'tcx> FulfillmentContext<'tcx> {
             errors.len()
         );
 
-        if errors.is_empty() { Ok(()) } else { Err(errors) }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 }
 
@@ -226,7 +232,11 @@ impl<'tcx> TraitEngine<'tcx> for FulfillmentContext<'tcx> {
             .into_iter()
             .map(to_fulfillment_error)
             .collect();
-        if errors.is_empty() { Ok(()) } else { Err(errors) }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 
     fn select_where_possible(
@@ -380,7 +390,7 @@ impl<'a, 'b, 'tcx> FulfillProcessor<'a, 'b, 'tcx> {
                 | ty::PredicateKind::ConstEquate(..) => {
                     let pred = infcx.replace_bound_vars_with_placeholders(binder);
                     ProcessResult::Changed(mk_pending(vec![
-                        obligation.with(pred.to_predicate(self.selcx.tcx())),
+                        obligation.with(pred.to_predicate(self.selcx.tcx()))
                     ]))
                 }
                 ty::PredicateKind::TypeWellFormedFromEnv(..) => {
@@ -613,12 +623,18 @@ impl<'a, 'b, 'tcx> FulfillProcessor<'a, 'b, 'tcx> {
         if obligation.predicate.is_global() {
             // no type variables present, can use evaluation for better caching.
             // FIXME: consider caching errors too.
-            if infcx.predicate_must_hold_considering_regions(obligation) {
-                debug!(
-                    "selecting trait at depth {} evaluated to holds",
-                    obligation.recursion_depth
-                );
-                return ProcessResult::Changed(vec![]);
+            match infcx.predicate_must_hold_considering_regions(obligation) {
+                Err(OverflowError {}) => {
+                    return ProcessResult::Error(FulfillmentErrorCode::CodeOverflow)
+                }
+                Ok(true) => {
+                    debug!(
+                        "selecting trait at depth {} evaluated to holds",
+                        obligation.recursion_depth
+                    );
+                    return ProcessResult::Changed(vec![]);
+                }
+                Ok(false) => {}
             }
         }
 

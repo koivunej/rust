@@ -32,6 +32,7 @@ use std::iter;
 
 use crate::traits::query::evaluate_obligation::InferCtxtExt as _;
 use crate::traits::query::normalize::AtExt as _;
+use crate::traits::OverflowError;
 use on_unimplemented::InferCtxtExt as _;
 use suggestions::InferCtxtExt as _;
 
@@ -455,7 +456,7 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
 
                         // Try to report a help message
                         if !trait_ref.has_infer_types_or_consts()
-                            && self.predicate_can_apply(obligation.param_env, trait_ref)
+                            && self.predicate_can_apply(obligation.param_env, trait_ref) == Ok(true)
                         {
                             // If a where-clause may be useful, remind the
                             // user that they can add it.
@@ -502,7 +503,8 @@ impl<'a, 'tcx> InferCtxtExt<'tcx> for InferCtxt<'a, 'tcx> {
                             });
                             let unit_obligation =
                                 obligation.with(predicate.without_const().to_predicate(tcx));
-                            if self.predicate_may_hold(&unit_obligation) {
+
+                            if self.predicate_may_hold(&unit_obligation) == Ok(true) {
                                 err.note("this trait is implemented for `()`.");
                                 err.note(
                                     "this error might have been caused by changes to \
@@ -1074,7 +1076,7 @@ trait InferCtxtPrivExt<'tcx> {
         &self,
         param_env: ty::ParamEnv<'tcx>,
         pred: ty::PolyTraitRef<'tcx>,
-    ) -> bool;
+    ) -> Result<bool, OverflowError>;
 
     fn note_obligation_cause(
         &self,
@@ -1173,6 +1175,10 @@ impl<'a, 'tcx> InferCtxtPrivExt<'tcx> for InferCtxt<'a, 'tcx> {
                     err.clone(),
                 )
                 .emit();
+            }
+            // TODO: this is wrong, say whether it was actually a cycle
+            FulfillmentErrorCode::CodeOverflow => {
+                self.report_overflow_error(&error.obligation, false)
             }
         }
     }
@@ -1680,7 +1686,7 @@ impl<'a, 'tcx> InferCtxtPrivExt<'tcx> for InferCtxt<'a, 'tcx> {
         &self,
         param_env: ty::ParamEnv<'tcx>,
         pred: ty::PolyTraitRef<'tcx>,
-    ) -> bool {
+    ) -> Result<bool, OverflowError> {
         struct ParamToVarFolder<'a, 'tcx> {
             infcx: &'a InferCtxt<'a, 'tcx>,
             var_map: FxHashMap<Ty<'tcx>, Ty<'tcx>>,

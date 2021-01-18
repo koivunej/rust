@@ -1528,7 +1528,7 @@ rustc_queries! {
 
     query type_implements_trait(
         key: (DefId, Ty<'tcx>, SubstsRef<'tcx>, ty::ParamEnv<'tcx>, )
-    ) -> bool {
+    ) -> Result<bool, OverflowError> {
         desc { "evaluating `type_implements_trait` `{:?}`", key }
     }
 
