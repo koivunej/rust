@@ -1513,7 +1513,7 @@ rustc_queries! {
     /// `infcx.predicate_must_hold()` instead.
     query evaluate_obligation(
         goal: CanonicalPredicateGoal<'tcx>
-    ) -> Result<traits::EvaluationResult, traits::OverflowError> {
+    ) -> Result<traits::EvaluationResult, traits::OverflowError<'tcx, ty::Predicate<'tcx>>> {
         desc { "evaluating trait selection obligation `{}`", goal.value.value }
     }
 
@@ -1528,7 +1528,7 @@ rustc_queries! {
 
     query type_implements_trait(
         key: (DefId, Ty<'tcx>, SubstsRef<'tcx>, ty::ParamEnv<'tcx>, )
-    ) -> Result<bool, OverflowError> {
+    ) -> Result<bool, OverflowError<'tcx, ty::Predicate<'tcx>>> {
         desc { "evaluating `type_implements_trait` `{:?}`", key }
     }
 

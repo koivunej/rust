@@ -26,7 +26,9 @@ use std::fmt;
 use std::ops::Deref;
 use std::rc::Rc;
 
-pub use self::select::{EvaluationCache, EvaluationResult, OverflowError, SelectionCache};
+pub use self::select::{
+    EvaluationCache, EvaluationResult, OverflowError, PredicateOverflow, SelectionCache,
+};
 
 pub type CanonicalChalkEnvironmentAndGoal<'tcx> = Canonical<'tcx, ChalkEnvironmentAndGoal<'tcx>>;
 
@@ -84,7 +86,7 @@ pub enum Reveal {
 ///
 /// We do not want to intern this as there are a lot of obligation causes which
 /// only live for a short period of time.
-#[derive(Clone, PartialEq, Eq, Hash, Lift)]
+#[derive(Clone, PartialEq, Eq, Hash, TypeFoldable, Lift, HashStable)]
 pub struct ObligationCause<'tcx> {
     /// `None` for `ObligationCause::dummy`, `Some` otherwise.
     data: Option<Rc<ObligationCauseData<'tcx>>>,
@@ -109,7 +111,7 @@ impl Deref for ObligationCause<'tcx> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Lift)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, TypeFoldable, Lift, HashStable)]
 pub struct ObligationCauseData<'tcx> {
     pub span: Span,
 
@@ -167,14 +169,14 @@ impl<'tcx> ObligationCause<'tcx> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Lift)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, TypeFoldable, Lift, HashStable)]
 pub struct UnifyReceiverContext<'tcx> {
     pub assoc_item: ty::AssocItem,
     pub param_env: ty::ParamEnv<'tcx>,
     pub substs: SubstsRef<'tcx>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Lift)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, TypeFoldable, Lift, HashStable)]
 pub enum ObligationCauseCode<'tcx> {
     /// Not well classified or should be obvious from the span.
     MiscObligation,
@@ -346,7 +348,7 @@ impl ObligationCauseCode<'_> {
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
 static_assert_size!(ObligationCauseCode<'_>, 40);
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, HashStable)]
 pub enum StatementAsExpression {
     CorrectType,
     NeedsBoxing,
@@ -359,7 +361,7 @@ impl<'tcx> ty::Lift<'tcx> for StatementAsExpression {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Lift)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, TypeFoldable, Lift, HashStable)]
 pub struct MatchExpressionArmCause<'tcx> {
     pub arm_span: Span,
     pub scrut_span: Span,
@@ -371,7 +373,7 @@ pub struct MatchExpressionArmCause<'tcx> {
     pub opt_suggest_box_span: Option<Span>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, HashStable)]
 pub struct IfExpressionCause {
     pub then: Span,
     pub else_sp: Span,
@@ -380,7 +382,7 @@ pub struct IfExpressionCause {
     pub opt_suggest_box_span: Option<Span>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Lift)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, TypeFoldable, Lift, HashStable)]
 pub struct DerivedObligationCause<'tcx> {
     /// The trait reference of the parent obligation that led to the
     /// current obligation. Note that only trait obligations lead to
@@ -402,7 +404,7 @@ pub enum SelectionError<'tcx> {
     ),
     TraitNotObjectSafe(DefId),
     NotConstEvaluatable(NotConstEvaluatable),
-    Overflow,
+    Overflow(PredicateOverflow<'tcx>),
 }
 
 /// When performing resolution, it is typically the case that there
@@ -816,4 +818,29 @@ pub enum MethodViolationCode {
 
     /// the method's receiver (`self` argument) can't be dispatched on
     UndispatchableReceiver,
+}
+
+/// An `Obligation` represents some trait reference (e.g., `i32: Eq`) for
+/// which the "impl_source" must be found. The process of finding a "impl_source" is
+/// called "resolving" the `Obligation`. This process consists of
+/// either identifying an `impl` (e.g., `impl Eq for i32`) that
+/// satisfies the obligation, or else finding a bound that is in
+/// scope. The eventual result is usually a `Selection` (defined below).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, HashStable, TypeFoldable, Lift)]
+pub struct Obligation<'tcx, T> {
+    /// The reason we have to prove this thing.
+    pub cause: ObligationCause<'tcx>,
+
+    /// The environment in which we should prove this thing.
+    pub param_env: ty::ParamEnv<'tcx>,
+
+    /// The thing we are trying to prove.
+    pub predicate: T,
+
+    /// If we started proving this as a result of trying to prove
+    /// something else, track the total depth to ensure termination.
+    /// If this goes over a certain threshold, we abort compilation --
+    /// in such cases, we can not say whether or not the predicate
+    /// holds for certain. Stupid halting problem; such a drag.
+    pub recursion_depth: usize,
 }

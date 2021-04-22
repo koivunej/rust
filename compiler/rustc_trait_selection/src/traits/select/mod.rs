@@ -413,7 +413,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         &mut self,
         stack: TraitObligationStackList<'o, 'tcx>,
         predicates: I,
-    ) -> Result<EvaluationResult, OverflowError>
+    ) -> Result<EvaluationResult, PredicateOverflow<'tcx>>
     where
         I: IntoIterator<Item = PredicateObligation<'tcx>> + std::fmt::Debug,
     {
@@ -441,7 +441,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         &mut self,
         previous_stack: TraitObligationStackList<'o, 'tcx>,
         obligation: PredicateObligation<'tcx>,
-    ) -> Result<EvaluationResult, OverflowError> {
+    ) -> Result<EvaluationResult, PredicateOverflow<'tcx>> {
         // `previous_stack` stores a `TraitObligation`, while `obligation` is
         // a `PredicateObligation`. These are distinct types, so we can't
         // use any `Option` combinator method that would force them to be
@@ -862,7 +862,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         &mut self,
         stack: &TraitObligationStack<'o, 'tcx>,
         candidate: &SelectionCandidate<'tcx>,
-    ) -> Result<EvaluationResult, OverflowError> {
+    ) -> Result<EvaluationResult, PredicateOverflow<'tcx>> {
         let mut result = self.evaluation_probe(|this| {
             let candidate = (*candidate).clone();
             match this.confirm_candidate(stack.obligation, candidate) {
@@ -962,14 +962,14 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         &self,
         obligation: &Obligation<'tcx, T>,
         error_obligation: &Obligation<'tcx, V>,
-    ) -> Result<(), OverflowError> {
+    ) -> Result<(), PredicateOverflow<'tcx>> {
         if !self.infcx.tcx.sess.recursion_limit().value_within_limit(obligation.recursion_depth) {
             match self.query_mode {
                 TraitQueryMode::Standard => {
                     self.infcx().report_overflow_error(error_obligation, true);
                 }
                 TraitQueryMode::Canonical => {
-                    return Err(OverflowError);
+                    return Err(OverflowError(error_obligation.to_owned()));
                 }
             }
         }
@@ -1256,7 +1256,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
         &mut self,
         stack: &TraitObligationStack<'o, 'tcx>,
         where_clause_trait_ref: ty::PolyTraitRef<'tcx>,
-    ) -> Result<EvaluationResult, OverflowError> {
+    ) -> Result<EvaluationResult, PredicateOverflow<'tcx>> {
         self.evaluation_probe(|this| {
             match this.match_where_clause_trait_ref(stack.obligation, where_clause_trait_ref) {
                 Ok(obligations) => this.evaluate_predicates_recursively(stack.list(), obligations),

@@ -136,7 +136,7 @@ impl<'a> HashStable<StableHashingContext<'a>> for AdtDef {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, HashStable)]
 pub enum AdtKind {
     Struct,
     Union,

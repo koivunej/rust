@@ -15,8 +15,8 @@ use rustc_span::Span;
 
 pub use self::FulfillmentErrorCode::*;
 pub use self::ImplSource::*;
-pub use self::ObligationCauseCode::*;
 pub use self::SelectionError::*;
+pub use rustc_middle::traits::select::ObligationCauseCode::*;
 
 pub use self::engine::{TraitEngine, TraitEngineExt};
 pub use self::project::MismatchedProjectionTypes;
@@ -26,31 +26,6 @@ pub use self::project::{
     ProjectionCacheStorage, Reveal,
 };
 pub use rustc_middle::traits::*;
-
-/// An `Obligation` represents some trait reference (e.g., `i32: Eq`) for
-/// which the "impl_source" must be found. The process of finding a "impl_source" is
-/// called "resolving" the `Obligation`. This process consists of
-/// either identifying an `impl` (e.g., `impl Eq for i32`) that
-/// satisfies the obligation, or else finding a bound that is in
-/// scope. The eventual result is usually a `Selection` (defined below).
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct Obligation<'tcx, T> {
-    /// The reason we have to prove this thing.
-    pub cause: ObligationCause<'tcx>,
-
-    /// The environment in which we should prove this thing.
-    pub param_env: ty::ParamEnv<'tcx>,
-
-    /// The thing we are trying to prove.
-    pub predicate: T,
-
-    /// If we started proving this as a result of trying to prove
-    /// something else, track the total depth to ensure termination.
-    /// If this goes over a certain threshold, we abort compilation --
-    /// in such cases, we can not say whether or not the predicate
-    /// holds for certain. Stupid halting problem; such a drag.
-    pub recursion_depth: usize,
-}
 
 pub type PredicateObligation<'tcx> = Obligation<'tcx, ty::Predicate<'tcx>>;
 pub type TraitObligation<'tcx> = Obligation<'tcx, ty::PolyTraitPredicate<'tcx>>;

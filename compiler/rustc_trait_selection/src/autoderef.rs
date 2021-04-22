@@ -1,5 +1,5 @@
 use crate::traits::query::evaluate_obligation::InferCtxtExt;
-use crate::traits::{self, OverflowError, TraitEngine};
+use crate::traits::{self, OverflowError, PredicateOverflow, TraitEngine};
 use rustc_errors::struct_span_err;
 use rustc_hir as hir;
 use rustc_infer::infer::InferCtxt;
@@ -119,7 +119,10 @@ impl<'a, 'tcx> Autoderef<'a, 'tcx> {
         }
     }
 
-    fn overloaded_deref_ty(&mut self, ty: Ty<'tcx>) -> Result<Option<Ty<'tcx>>, OverflowError> {
+    fn overloaded_deref_ty(
+        &mut self,
+        ty: Ty<'tcx>,
+    ) -> Result<Option<Ty<'tcx>>, PredicateOverflow<'tcx>> {
         debug!("overloaded_deref_ty({:?})", ty);
 
         let tcx = self.infcx.tcx;

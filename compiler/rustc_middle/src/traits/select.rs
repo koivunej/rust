@@ -251,12 +251,24 @@ impl EvaluationResult {
     }
 }
 
-/// Indicates that trait evaluation caused overflow.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, HashStable)]
-pub struct OverflowError<'tcx, T>(Obligation<'tcx, T>);
+use super::Obligation;
 
-impl<'tcx> From<OverflowError> for SelectionError<'tcx> {
-    fn from(_: OverflowError) -> SelectionError<'tcx> {
-        SelectionError::Overflow
+/// Indicates that trait evaluation caused overflow.
+#[derive(Clone, Debug, PartialEq, Eq, HashStable)]
+pub struct OverflowError<'tcx, T>(pub Obligation<'tcx, T>);
+
+/// The usual case, hopefully?
+/// FIXME(koivunej): explain why exactly this is the usual case?
+pub type PredicateOverflow<'tcx> = OverflowError<'tcx, ty::Predicate<'tcx>>;
+
+/*impl<'tcx, T> std::fmt::Debug for OverflowError<'tcx, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("OverflowError(FIXME)")
+    }
+}*/
+
+impl<'tcx> From<PredicateOverflow<'tcx>> for SelectionError<'tcx> {
+    fn from(p: PredicateOverflow<'tcx>) -> SelectionError<'tcx> {
+        SelectionError::Overflow(p)
     }
 }
